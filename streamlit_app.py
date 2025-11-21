@@ -1,79 +1,64 @@
+# %%time
 import streamlit as st
 
-from langchain_gigachat.embeddings.gigachat import GigaChatEmbeddings
-
-auth = st.secrets["gigachat_api_key"]
-embeddings = GigaChatEmbeddings(
-    credentials=auth,
-    verify_ssl_certs=False
-)
+gauth = st.secrets["gigachat_api_key"]
 
 from langchain_gigachat import GigaChat
 
 llm = GigaChat(
-            credentials=auth,
+            credentials=gauth,
             model='GigaChat',
             verify_ssl_certs=False,
             profanity_check=False
             )
 
-import faiss
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_community.vectorstores import FAISS
+from langchain_gigachat.embeddings.gigachat import GigaChatEmbeddings
 
-embedding_dim = len(embeddings.embed_query("hello world"))
-index = faiss.IndexFlatL2(embedding_dim)
-
-vector_store = FAISS(
-    embedding_function=embeddings,
-    index=index,
-    docstore=InMemoryDocstore(),
-    index_to_docstore_id={},
+embeddings = GigaChatEmbeddings(
+    credentials=gauth,
+    verify_ssl_certs=False
 )
 
-from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+import os.path
+from langchain_community.vectorstores import FAISS
+from langchain_community.document_loaders import TextLoader
 
-from langchain_community.document_loaders import PyPDFLoader
+db_file_name = "db_pdf/db_01"
+file_path = db_file_name + "/index.faiss"
 
-loader = PyPDFLoader("aero_rag.pdf")
+if os.path.exists(file_path):
+    db = FAISS.load_local(db_file_name, embeddings, allow_dangerous_deserialization=True)
 
-docs = loader.load()
+embedding_retriever = db.as_retriever(search_kwargs={"k": 10})
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=200)
-all_splits = text_splitter.split_documents(docs)
-
-# Индексируем чанки
-_ = vector_store.add_documents(documents=all_splits)
-
-
-
+# question = "Цетровка"
 def generate_response(question):
-
+    
+    from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
+    
+    template = """
+    Ты — полезный помощник для вопросно ответных приложений. Используй следующий контекст {context},
+    чтобы ответить на вопрос {question}.
+    Если ответа нет в контексте — скажи, что не знаешь.
+    """
+    
+    prompt = ChatPromptTemplate.from_template(template)
+    
+    chain = prompt | llm | StrOutputParser()
+    
+    context = embedding_retriever.invoke(question)
+    response = chain.invoke({"context": context, "question": question})
+    
+    # with open("lection.txt", "w", encoding="utf-8") as f:
+    #     f.write(response)
 
-    retrieved_docs = vector_store.similarity_search(question)
-
-    context = '\n'.join([doc.page_content for doc in retrieved_docs])
-
-    prompt_template = ChatPromptTemplate([
-        ("system", "Ты — полезный помощник для вопросно ответных приложений. Используй следующий контекст, чтобы ответить на вопрос. "
-                "Если ответа нет в контексте — скажи, что не знаешь.\n\nКонтекст:\n {context}"),
-        ("user", "{question}")
-    ])
-
-    chain = prompt_template | llm
-
-    response = chain.invoke({
-        "question": question,
-        "context": context,
-    })
- 
     return response
 
 result = ""
 
 with st.form(key='qa_form', clear_on_submit=True, border=True):
+    st.subheader('Основы теории полета')
     query_text = st.text_input(
     'Отправьте свой вопрос LLM:',
     placeholder='Здесь нужно написать вопрос',
@@ -88,4 +73,5 @@ with st.form(key='qa_form', clear_on_submit=True, border=True):
 
 # Отображаем результат, если он есть
 if result:
-    st.info(result.content)
+    st.info(result)
+    
