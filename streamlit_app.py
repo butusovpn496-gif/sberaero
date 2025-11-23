@@ -38,10 +38,13 @@ def generate_response(question):
     from langchain_core.prompts import ChatPromptTemplate
     
     template = """
-    Ты — полезный помощник для вопросно ответных приложений. Используй следующий контекст {context},
-    чтобы ответить на вопрос {question}.
+    Ты — преподаватель по теории полета. Используй следующий контекст {context},
+    чтобы подробно и понятно для студентов ответить на вопрос {question}.
     Если ответа нет в контексте — скажи, что не знаешь.
     """
+    # Ты — полезный помощник для вопросно ответных приложений. Используй следующий контекст {context},
+    # чтобы ответить на вопрос {question}.
+    # Если ответа нет в контексте — скажи, что не знаешь.
     
     prompt = ChatPromptTemplate.from_template(template)
     
@@ -58,7 +61,7 @@ def generate_response(question):
 result = ""
 
 with st.form(key='qa_form', clear_on_submit=True, border=True):
-    st.subheader('Основы теории полета')
+    st.subheader('Основы теории полета. GigaChat')
     query_text = st.text_input(
     'Отправьте свой вопрос LLM:',
     placeholder='Здесь нужно написать вопрос',
